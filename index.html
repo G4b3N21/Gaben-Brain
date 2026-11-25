@@ -85,16 +85,13 @@
     .btn-sm { padding: 6px 10px; font-size: 12px; }
     .btn-danger { color: var(--danger); border-color: rgba(239, 68, 68, 0.4); }
 
-    /* Horizontal Scrollable Project Pills */
+   /* Wrapping Project Pills */
     .boards-bar {
       display: flex;
+      flex-wrap: wrap;
       gap: 7px;
-      overflow-x: auto;
-      padding-bottom: 6px;
       margin-bottom: 14px;
-      scrollbar-width: none;
     }
-    .boards-bar::-webkit-scrollbar { display: none; }
 
     .board-pill {
       white-space: nowrap;
