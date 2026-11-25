@@ -189,7 +189,8 @@
 <div class="container">
   <div class="top-bar">
     <h2><span class="lime-accent">Gaben</span> Brain</h2>
-    <div class="top-actions">
+        <div class="top-actions">
+      <button class="btn-sm" style="color:var(--lime); border-color:rgba(148,207,12,0.4);" onclick="showRandomSpark()">Spark</button>
       <button class="btn-sm" onclick="openBoardsModal()">Projects</button>
       <button class="btn-sm" onclick="exportData()">Export</button>
       <button class="btn-sm" onclick="document.getElementById('importFile').click()">Import</button>
@@ -248,6 +249,19 @@
 </div>
 
 <div id="toast" class="toast">Copied for Task app!</div>
+  
+  <!-- RANDOM SPARK MODAL -->
+<div id="sparkModalBackdrop" class="modal-backdrop">
+  <div class="modal" style="text-align:center;">
+    <h3 style="margin-bottom:8px;">Random Spark</h3>
+    <div id="sparkContent" style="margin: 16px 0;"></div>
+    <div class="modal-actions">
+      <button onclick="document.getElementById('sparkModalBackdrop').style.display='none'">Close</button>
+      <button class="btn-lime" onclick="showRandomSpark()">Next Spark</button>
+    </div>
+  </div>
+</div>
+
 <script>
   const IDEAS_KEY = 'gaben_brain_ideas_v1';
   const BOARDS_KEY = 'gaben_brain_boards_v1';
@@ -304,15 +318,55 @@
     });
   }
 
+    function togglePin(id) {
+    const item = ideas.find(i => i.id === id);
+    if (!item) return;
+    item.pinned = !item.pinned;
+    saveAll();
+    renderIdeas();
+  }
+
+  function moveIdea(id, direction) {
+    const idx = ideas.findIndex(i => i.id === id);
+    if (idx === -1) return;
+    const targetIdx = idx + direction;
+    if (targetIdx < 0 || targetIdx >= ideas.length) return;
+    const temp = ideas[idx];
+    ideas[idx] = ideas[targetIdx];
+    ideas[targetIdx] = temp;
+    saveAll();
+    renderIdeas();
+  }
+
+  function showRandomSpark() {
+    const pool = currentBoard === 'All' ? ideas : ideas.filter(i => i.board === currentBoard);
+    if (pool.length === 0) return alert('No ideas available in this view yet.');
+    const pick = pool[Math.floor(Math.random() * pool.length)];
+    const color = getBoardColor(pick.board);
+    document.getElementById('sparkContent').innerHTML = `
+      <div class="idea-card" style="border-left-color:${color}; text-align:left; margin:0;">
+        <div class="card-top">
+          <div class="idea-title">${escapeHtml(pick.title)}</div>
+          <span class="board-badge" style="color:${color}; border-color:${color}55;">${escapeHtml(pick.board)}</span>
+        </div>
+        ${pick.tag ? `<div class="idea-tag"># ${escapeHtml(pick.tag)}</div>` : ''}
+        ${pick.note ? `<div class="idea-note">${escapeHtml(pick.note)}</div>` : ''}
+      </div>
+    `;
+    document.getElementById('sparkModalBackdrop').style.display = 'flex';
+  }
+
   function renderIdeas() {
     const listEl = document.getElementById('ideasList');
     const query = document.getElementById('searchInput').value.trim().toLowerCase();
 
-    const filtered = ideas.filter(item => {
-      const matchBoard = query ? true : (currentBoard === 'All' || item.board === currentBoard);
-      const haystack = `${item.title} ${item.board} ${item.tag || ''} ${item.note || ''}`.toLowerCase();
-      return matchBoard && haystack.includes(query);
-    });
+    const filtered = ideas
+      .filter(item => {
+        const matchBoard = query ? true : (currentBoard === 'All' || item.board === currentBoard);
+        const haystack = `${item.title} ${item.board} ${item.tag || ''} ${item.note || ''}`.toLowerCase();
+        return matchBoard && haystack.includes(query);
+      })
+      .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
 
     if (filtered.length === 0) {
       listEl.innerHTML = `<p style="text-align:center; color: var(--muted); margin-top: 40px;">No ideas here yet. Tap "+ Add Idea" to capture a thought!</p>`;
@@ -320,22 +374,30 @@
     }
 
     listEl.innerHTML = filtered.map(item => {
-            const tagHtml = item.tag ? `<div class="idea-tag"># ${escapeHtml(item.tag)}</div>` : '';
+      const tagHtml = item.tag ? `<div class="idea-tag"># ${escapeHtml(item.tag)}</div>` : '';
       const noteHtml = item.note ? `<div class="idea-note">${escapeHtml(item.note)}</div>` : '';
       const color = getBoardColor(item.board);
+      const pinStyle = item.pinned ? 'color:#FBBF24; border-color:rgba(251,191,36,0.5);' : 'color:var(--muted);';
 
       return `
-        <div class="idea-card" style="border-left-color: ${color};">
+        <div class="idea-card" style="border-left-color: ${color}; ${item.pinned ? 'box-shadow: 0 0 0 1px rgba(251,191,36,0.25);' : ''}">
           <div class="card-top">
-            <div class="idea-title">${escapeHtml(item.title)}</div>
+            <div class="idea-title">${item.pinned ? '★ ' : ''}${escapeHtml(item.title)}</div>
             <span class="board-badge" style="color: ${color}; border-color: ${color}55;">${escapeHtml(item.board)}</span>
           </div>
           ${tagHtml}
           ${noteHtml}
-          <div class="card-actions">
-            <button class="btn-sm" onclick="copyForTask('${item.id}')">Copy</button>
-            <button class="btn-sm" onclick="openIdeaModal('${item.id}')">Edit</button>
-            <button class="btn-sm btn-danger" onclick="deleteIdea('${item.id}')">Delete</button>
+          <div class="card-actions" style="justify-content: space-between;">
+            <div style="display:flex; gap:5px;">
+              <button class="btn-sm" style="${pinStyle}" onclick="togglePin('${item.id}')">★</button>
+              <button class="btn-sm" onclick="moveIdea('${item.id}', -1)">↑</button>
+              <button class="btn-sm" onclick="moveIdea('${item.id}', 1)">↓</button>
+            </div>
+            <div style="display:flex; gap:5px;">
+              <button class="btn-sm" onclick="copyForTask('${item.id}')">Copy</button>
+              <button class="btn-sm" onclick="openIdeaModal('${item.id}')">Edit</button>
+              <button class="btn-sm btn-danger" onclick="deleteIdea('${item.id}')">Delete</button>
+            </div>
           </div>
         </div>
       `;
