@@ -400,7 +400,7 @@
     renderIdeas();
   }
 
-  // Projects / Boards Management
+   // Projects / Boards Management (with Color & Rename)
   function openBoardsModal() {
     renderBoardsManageList();
     document.getElementById('boardsModalBackdrop').style.display = 'flex';
@@ -413,19 +413,62 @@
   }
 
   function renderBoardsManageList() {
-    document.getElementById('boardsManageList').innerHTML = boards.map((b, idx) => `
-      <div class="board-list-item">
-        <span>${escapeHtml(b)}</span>
-        ${b === 'Gifts' ? '<span style="font-size:11px; color:var(--gift);">Pinned</span>' : `<button class="btn-sm btn-danger" onclick="removeBoard(${idx})">Remove</button>`}
-      </div>
-    `).join('');
+    document.getElementById('boardsManageList').innerHTML = boards.map((b, idx) => {
+      const color = getBoardColor(b);
+      const isGifts = b === 'Gifts';
+      return `
+        <div class="board-list-item" style="border-left: 4px solid ${color};">
+          <div style="display:flex; align-items:center; gap:8px; overflow:hidden;">
+            <input type="color" value="${color}" oninput="changeBoardColor('${escapeJs(b)}', this.value)" onchange="changeBoardColor('${escapeJs(b)}', this.value)" style="width:30px; height:30px; padding:0; border:none; background:none; margin:0; cursor:pointer; flex-shrink:0;" />
+            <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(b)}</span>
+          </div>
+          <div style="display:flex; gap:5px; flex-shrink:0;">
+            ${isGifts ? '<span style="font-size:11px; color:var(--gift); padding:4px 6px;">Pinned</span>' : `
+              <button class="btn-sm" onclick="renameBoard(${idx})">Edit</button>
+              <button class="btn-sm btn-danger" onclick="removeBoard(${idx})">Remove</button>
+            `}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function changeBoardColor(boardName, newColor) {
+    boardColors[boardName] = newColor;
+    localStorage.setItem('gaben_brain_colors_v1', JSON.stringify(boardColors));
+    renderBoardsManageList();
+  }
+
+  function renameBoard(idx) {
+    const oldName = boards[idx];
+    const newName = prompt('Rename project:', oldName);
+    if (!newName) return;
+    const trimmed = newName.trim();
+    if (!trimmed || trimmed === oldName) return;
+    if (boards.includes(trimmed)) return alert('A project with this name already exists.');
+
+    boards[idx] = trimmed;
+    boardColors[trimmed] = getBoardColor(oldName);
+    delete boardColors[oldName];
+    localStorage.setItem('gaben_brain_colors_v1', JSON.stringify(boardColors));
+
+    ideas.forEach(item => {
+      if (item.board === oldName) item.board = trimmed;
+    });
+
+    if (currentBoard === oldName) currentBoard = trimmed;
+    saveAll();
+    renderBoardsManageList();
   }
 
   function addBoard() {
     const input = document.getElementById('newBoardInput');
+    const colorInput = document.getElementById('newBoardColor');
     const val = input.value.trim();
     if (!val || boards.includes(val)) return;
     boards.push(val);
+    boardColors[val] = colorInput ? colorInput.value : '#94CF0C';
+    localStorage.setItem('gaben_brain_colors_v1', JSON.stringify(boardColors));
     input.value = '';
     saveAll();
     renderBoardsManageList();
@@ -435,13 +478,15 @@
     const removed = boards[idx];
     if (currentBoard === removed) currentBoard = 'All';
     boards.splice(idx, 1);
+    delete boardColors[removed];
+    localStorage.setItem('gaben_brain_colors_v1', JSON.stringify(boardColors));
     saveAll();
     renderBoardsManageList();
   }
 
   // Export & Import
   function exportData() {
-    const payload = JSON.stringify({ ideas, boards }, null, 2);
+    const payload = JSON.stringify({ ideas, boards, boardColors }, null, 2);
     const blob = new Blob([payload], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -452,7 +497,7 @@
   }
 
   function importData(event) {
-    const file = event.target.files;
+    const file = event.target.files[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -460,8 +505,10 @@
         const parsed = JSON.parse(e.target.result);
         if (Array.isArray(parsed.ideas)) {
           ideas = parsed.ideas;
-          if (Array.isArray(parsed.boards) && parsed.boards.length) {
-            boards = parsed.boards;
+          if (Array.isArray(parsed.boards) && parsed.boards.length) boards = parsed.boards;
+          if (parsed.boardColors) {
+            boardColors = parsed.boardColors;
+            localStorage.setItem('gaben_brain_colors_v1', JSON.stringify(boardColors));
           }
           saveAll();
           renderBoardsBar();
